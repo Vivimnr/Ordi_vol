@@ -2,7 +2,10 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#101722">
 <title>PrepVol VFR — Préparation de vol</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -98,6 +101,43 @@ canvas{max-width:100%}
 .leaflet-container{font:inherit}
 .wpt-icon{background:var(--accent2);border:2px solid #fff;border-radius:50%;box-shadow:0 0 5px rgba(0,0,0,.6)}
 .leaflet-tooltip.wpt-tip{background:#101722;color:#e8eef5;border:1px solid var(--border);font-weight:600}
+.ck-item .det{display:block;font-size:11px;color:var(--muted);font-weight:400}
+.emerg-card{background:rgba(255,82,82,.07);border:1px solid var(--bad);border-radius:10px;padding:12px;margin-bottom:12px}
+.emerg-card h3{color:var(--bad);font-size:14px;margin-bottom:8px}
+.emerg-card ol{margin-left:18px;font-size:13px;line-height:1.5}
+.emerg-card li small{color:var(--muted);display:block}
+.scrollx{overflow-x:auto;-webkit-overflow-scrolling:touch}
+#acSelect{width:auto;max-width:220px;background:var(--panel2);font-weight:600}
+#sbToggle{display:none}
+#sbClose{display:none}
+/* ============ MOBILE ============ */
+@media(max-width:760px){
+  header{padding:6px 8px;gap:8px}
+  header h1{font-size:15px}
+  nav{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;scrollbar-width:none}
+  nav::-webkit-scrollbar{display:none}
+  nav button{padding:8px 10px;font-size:12.5px;white-space:nowrap}
+  #acSelect{max-width:130px;font-size:12px}
+  .tab{padding:12px}
+  input,select{font-size:16px}          /* évite le zoom auto iOS */
+  input{width:80px}
+  #tab-map.active{flex-direction:column}
+  #sidebar{width:100%;min-width:0;order:2;max-height:52vh;border-right:none;border-top:1px solid var(--border);display:none}
+  body.sb-open #sidebar{display:flex}
+  body.sb-open #mapwrap{display:none}
+  #mapwrap{order:1}
+  #sbToggle{display:block;position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1001;box-shadow:0 2px 10px rgba(0,0,0,.5)}
+  #sbClose{display:block;width:100%;margin-bottom:4px}
+  #navPanel{left:6px;right:6px;bottom:6px;padding:6px;gap:5px;justify-content:center}
+  .inst{min-width:50px;padding:3px 6px}
+  .inst b{font-size:15px}
+  .inst span{font-size:8.5px}
+  th,td{padding:5px 6px;font-size:12px}
+  td input{width:56px;font-size:14px}
+  .totals b{font-size:14px}
+  .section-title{font-size:16px}
+  .grid2{grid-template-columns:1fr}
+}
 @media print{
   header,#sidebar,nav{display:none!important}
   body{background:#fff;color:#000;overflow:visible}
@@ -113,6 +153,7 @@ canvas{max-width:100%}
 <body>
 <header>
   <h1>✈ PrepVol <span>VFR</span></h1>
+  <select id="acSelect" title="Avion actif"></select>
   <nav id="tabs">
     <button data-tab="map" class="active">Carte & Route</button>
     <button data-tab="nav">Log de Nav</button>
@@ -127,6 +168,7 @@ canvas{max-width:100%}
 <!-- ================= CARTE ================= -->
 <div class="tab active" id="tab-map">
   <div id="sidebar">
+    <button class="btn sec" id="sbClose">▾ Voir la carte</button>
     <div class="box">
       <h3>Ajouter un terrain</h3>
       <div class="row">
@@ -177,6 +219,7 @@ canvas{max-width:100%}
     <div class="row"><input class="wide" id="oaipKey" placeholder="Clé API OpenAIP (optionnel)"><button class="btn sec" id="oaipBtn">OK</button></div>
   </div>
   <div id="mapwrap">
+    <button class="btn" id="sbToggle">☰ Route & préparation</button>
     <div id="map"></div>
     <div id="navPanel" hidden>
       <div class="inst"><b id="nGS">—</b><span>GS kt</span></div>
@@ -201,13 +244,13 @@ canvas{max-width:100%}
   <div class="row" style="margin-bottom:12px">
     <button class="btn" id="printNavBtn">🖨 Imprimer le log</button>
   </div>
-  <table id="navTable">
+  <div class="scrollx"><table id="navTable">
     <thead><tr>
       <th>#</th><th>De</th><th>Vers</th><th>Rv (°)</th><th>Dérive</th><th>Cm (°)</th>
       <th>Dist (NM)</th><th>GS (kt)</th><th>Temps</th><th>Cumul</th><th>Carb (L)</th>
     </tr></thead>
     <tbody id="navBody"></tbody>
-  </table>
+  </table></div>
   <div class="disclaimer">⚠ Outil d'aide à la préparation. Vérifiez toujours vos calculs avec les documents officiels (cartes OACI, VAC, manuel de vol). Ne pas utiliser comme moyen primaire de navigation.</div>
 </div>
 
@@ -215,17 +258,14 @@ canvas{max-width:100%}
 <div class="tab" id="tab-wb">
   <div class="section-title">Devis de masse et centrage</div>
   <div class="section-sub">Sélectionnez un avion type puis ajustez les masses. Les bras de levier sont modifiables (reportez ceux du manuel de vol de VOTRE avion).</div>
-  <div class="row" style="margin-bottom:14px">
-    <label style="flex:0 0 auto">Avion :</label>
-    <select id="acSelect" style="width:230px"></select>
-  </div>
+  <p class="hint" id="acInfo" style="margin-bottom:14px"></p>
   <div class="grid2">
     <div>
-      <table id="wbTable">
+      <div class="scrollx"><table id="wbTable">
         <thead><tr><th>Poste</th><th>Masse (kg)</th><th>Bras (m)</th><th>Moment (kg·m)</th></tr></thead>
         <tbody id="wbBody"></tbody>
         <tfoot><tr style="font-weight:700"><td>TOTAL</td><td id="wbMass">—</td><td id="wbCg">—</td><td id="wbMom">—</td></tr></tfoot>
-      </table>
+      </table></div>
       <div id="wbVerdict" class="verdict ok">—</div>
     </div>
     <div class="box" style="padding:14px">
@@ -284,6 +324,7 @@ canvas{max-width:100%}
   <div class="section-sub">Progression sauvegardée dans le navigateur. <button class="btn sec" id="ckReset" style="margin-left:10px">Réinitialiser</button></div>
   <div id="ckBar"><div id="ckFill"></div></div>
   <div id="ckOut"></div>
+  <div id="ckEmerg"></div>
 </div>
 
 </main>
@@ -638,38 +679,63 @@ $("printNavBtn").addEventListener("click",()=>{
   setTimeout(()=>$("tab-nav").classList.remove("print-me"),500);
 });
 
-// ===================== MASSE & CENTRAGE =====================
-// Valeurs d'EXEMPLE (kg / m). À remplacer par la fiche de pesée réelle.
+// ===================== PROFILS AVION =====================
+// kind:"cg" = devis avec centrage (bras + enveloppe) / kind:"ulm" = contrôle de masse simple (manuel ULM)
+// Les valeurs viennent des manuels constructeurs — vérifiez avec la fiche de pesée de VOTRE machine.
 const AIRCRAFT = {
-  "DR400-120": { mtow:900, fuelCap:110, fuelArm:1.12,
+  "Nynja 912 (ULM)": { kind:"ulm", tas:80, ff:13, fuelCap:60, fuelDens:0.72, ck:"nynja",
+    mtow:450, chute:22.5,
+    rows:[["Masse à vide (équipée)",273],["Pilote",80],["Passager",0],["Bagages",0],["Parachute de secours (22,5 kg si installé)",0]],
+    info:"Skyranger Nynja 912 — MTOW 450 kg, +22,5 kg autorisés si parachute de secours installé. Croisière ≈ 80 kt, Rotax 912 ≈ 13 L/h (Mogas 0,72 kg/L). Réservoir 50-60 L selon version."},
+  "Alpha Trainer (Pipistrel)": { kind:"ulm", tas:108, ff:13.6, fuelCap:50, fuelDens:0.72, ck:"generic",
+    mtow:550, chute:0,
+    rows:[["Masse à vide",300],["Pilote",80],["Passager",0],["Bagages (max 25 kg)",0]],
+    info:"POH Pipistrel Alpha Trainer — MTOW 550 kg (LSA ; adaptez à votre classe ULM), réservoir 50 L (48 utilisables), croisière 108 kt à 5300 tr/min, ≈ 13,6 L/h (9,5 L/h en tours de piste)."},
+  "DA40 NG": { kind:"cg", tas:125, ff:20, fuelCap:106, fuelDens:0.8, fuelArm:2.63, ck:"generic",
+    mtow:1310,
+    envelope:[[2.40,940],[2.40,1078],[2.466,1310],[2.531,1310],[2.531,940]],
+    rows:[["Masse à vide (équipée)",920,2.45],["Pilote + pax avant",160,2.30],["Passagers arrière",0,3.25],["Bagages std (max 45 kg)",0,3.65]],
+    info:"AFM DA40 NG (Doc 6.01.15-E) — bras : sièges AV 2,30 m, AR 3,25 m, carburant 2,63 m, bagages 3,65 m. Carburant Jet A-1 (0,8 kg/L), 106 L utilisables. Reportez la masse à vide et le bras de VOTRE cellule (fiche de pesée)."},
+  "DR400-120 (exemple)": { kind:"cg", tas:105, ff:22, fuelCap:110, fuelDens:0.72, fuelArm:1.12, ck:"generic",
+    mtow:900,
     envelope:[[0.205,550],[0.205,700],[0.428,900],[0.564,900],[0.564,550]],
-    rows:[["Masse à vide",580,0.31],["Pilote + passager AV",150,0.41],["Passagers AR",0,1.19],["Bagages",0,1.90]]},
-  "Cessna 172N": { mtow:1043, fuelCap:144, fuelArm:1.22,
+    rows:[["Masse à vide",580,0.31],["Pilote + passager AV",150,0.41],["Passagers AR",0,1.19],["Bagages",0,1.90]],
+    info:"Valeurs d'exemple — à remplacer par le manuel de vol de votre DR400."},
+  "Cessna 172N (exemple)": { kind:"cg", tas:110, ff:32, fuelCap:144, fuelDens:0.72, fuelArm:1.22, ck:"generic",
+    mtow:1043,
     envelope:[[0.89,600],[0.89,885],[1.02,1043],[1.20,1043],[1.20,600]],
-    rows:[["Masse à vide",650,0.99],["Pilote + passager AV",150,0.94],["Passagers AR",0,1.85],["Bagages",0,2.41]]},
-  "PA-28-161": { mtow:1055, fuelCap:181, fuelArm:2.41,
-    envelope:[[2.11,600],[2.11,885],[2.21,1055],[2.36,1055],[2.36,600]],
-    rows:[["Masse à vide",640,2.20],["Pilote + passager AV",150,2.05],["Passagers AR",0,3.00],["Bagages",0,3.63]]}
+    rows:[["Masse à vide",650,0.99],["Pilote + passager AV",150,0.94],["Passagers AR",0,1.85],["Bagages",0,2.41]],
+    info:"Valeurs d'exemple — à remplacer par le manuel de vol de votre C172."}
 };
 const acSel=$("acSelect");
-Object.keys(AIRCRAFT).forEach(k=>{ const o=document.createElement("option"); o.value=k; o.textContent=k+" (exemple)"; acSel.appendChild(o); });
-acSel.addEventListener("change",()=>{ buildWB(); $("fCap").value=AIRCRAFT[acSel.value].fuelCap; });
+Object.keys(AIRCRAFT).forEach(k=>{ const o=document.createElement("option"); o.value=k; o.textContent=k; acSel.appendChild(o); });
+function applyProfile(){
+  const ac=AIRCRAFT[acSel.value];
+  store.set("ac",acSel.value);
+  $("pTas").value=ac.tas; $("pFF").value=ac.ff;
+  $("fFF").value=ac.ff; $("fCap").value=ac.fuelCap;
+  $("acInfo").textContent="📖 "+ac.info;
+  store.set("params",getParams());
+  buildWB(); buildCk(); refreshNav();
+}
+acSel.addEventListener("change",applyProfile);
 
 function buildWB(){
   const ac=AIRCRAFT[acSel.value], tb=$("wbBody");
+  const isCg=ac.kind==="cg";
   tb.innerHTML="";
   ac.rows.forEach(r=>{
     const tr=document.createElement("tr");
     tr.innerHTML="<td style='text-align:left'>"+r[0]+"</td>"+
       "<td><input type='number' class='wb-m' value='"+r[1]+"' step='1'></td>"+
-      "<td><input type='number' class='wb-a' value='"+r[2]+"' step='0.01'></td>"+
+      "<td>"+(isCg?"<input type='number' class='wb-a' value='"+r[2]+"' step='0.01'>":"—")+"</td>"+
       "<td class='wb-mom'>—</td>";
     tb.appendChild(tr);
   });
   const trF=document.createElement("tr");
   trF.innerHTML="<td style='text-align:left'>Carburant <small id='wbFuelL' style='color:var(--muted)'></small></td>"+
-    "<td><input type='number' class='wb-m' id='wbFuelKg' value='"+Math.round(ac.fuelCap*0.72*0.8)+"' step='1'></td>"+
-    "<td><input type='number' class='wb-a' value='"+ac.fuelArm+"' step='0.01'></td><td class='wb-mom'>—</td>";
+    "<td><input type='number' class='wb-m' id='wbFuelKg' value='"+Math.round(ac.fuelCap*ac.fuelDens*0.8)+"' step='1'></td>"+
+    "<td>"+(isCg?"<input type='number' class='wb-a' value='"+ac.fuelArm+"' step='0.01'>":"—")+"</td><td class='wb-mom'>—</td>";
   tb.appendChild(trF);
   tb.querySelectorAll("input").forEach(inp=>inp.addEventListener("input",refreshWB));
   refreshWB();
@@ -677,22 +743,60 @@ function buildWB(){
 function refreshWB(){
   const ac=AIRCRAFT[acSel.value];
   if(!$("wbBody").children.length) return;
-  let mass=0, mom=0;
+  const isCg=ac.kind==="cg";
+  let mass=0, mom=0, chuteKg=0;
   document.querySelectorAll("#wbBody tr").forEach(tr=>{
-    const m=+tr.querySelector(".wb-m").value||0, a=+tr.querySelector(".wb-a").value||0;
+    const m=+tr.querySelector(".wb-m").value||0;
+    const aEl=tr.querySelector(".wb-a"), a=aEl?(+aEl.value||0):0;
     mass+=m; mom+=m*a;
-    tr.querySelector(".wb-mom").textContent=(m*a).toFixed(1);
+    if(/parachute/i.test(tr.cells[0].textContent) && m>0) chuteKg=m;
+    tr.querySelector(".wb-mom").textContent=isCg?(m*a).toFixed(1):"—";
   });
   const cg=mass?mom/mass:0;
-  const fk=$("wbFuelKg"); if(fk) $("wbFuelL").textContent="("+(+fk.value/0.72).toFixed(0)+" L à 0,72 kg/L)";
+  const fk=$("wbFuelKg"); if(fk) $("wbFuelL").textContent="("+(+fk.value/ac.fuelDens).toFixed(0)+" L à "+ac.fuelDens.toFixed(2).replace(".",",")+" kg/L)";
+  const mtowEff=ac.mtow + (chuteKg>0?(ac.chute||0):0);
   $("wbMass").textContent=mass.toFixed(0)+" kg";
-  $("wbCg").textContent=cg.toFixed(3)+" m";
-  $("wbMom").textContent=mom.toFixed(1);
-  const inMass=mass<=ac.mtow, inCg=pointInPoly(cg,mass,ac.envelope);
+  $("wbCg").textContent=isCg?cg.toFixed(3)+" m":"—";
+  $("wbMom").textContent=isCg?mom.toFixed(1):"—";
+  const inMass=mass<=mtowEff;
+  const inCg=isCg?pointInPoly(cg,mass,ac.envelope):true;
   const v=$("wbVerdict");
-  if(inMass&&inCg){ v.className="verdict ok"; v.textContent="✔ Dans les limites — Masse "+mass.toFixed(0)+" / "+ac.mtow+" kg, centrage "+cg.toFixed(3)+" m"; }
-  else{ v.className="verdict bad"; v.textContent="✘ HORS LIMITES — "+(!inMass?("surcharge de "+(mass-ac.mtow).toFixed(0)+" kg ") : "")+(!inCg?"centrage hors enveloppe":""); }
-  drawEnvelope(ac,cg,mass,inMass&&inCg);
+  if(inMass&&inCg){
+    v.className="verdict ok";
+    v.textContent="✔ Dans les limites — "+mass.toFixed(0)+" / "+mtowEff+" kg (marge "+(mtowEff-mass).toFixed(0)+" kg)"+(isCg?", centrage "+cg.toFixed(3)+" m":"");
+  } else {
+    v.className="verdict bad";
+    v.textContent="✘ HORS LIMITES — "+(!inMass?("surcharge de "+(mass-mtowEff).toFixed(0)+" kg — VOL INTERDIT "):"")+(!inCg?"centrage hors enveloppe":"");
+  }
+  if(isCg) drawEnvelope(ac,cg,mass,inMass&&inCg);
+  else drawGauge(mass,mtowEff,ac);
+}
+function drawGauge(mass,mtow,ac){
+  const cv=$("wbCanvas"), ctx=cv.getContext("2d");
+  ctx.clearRect(0,0,cv.width,cv.height);
+  const x0=50, x1=cv.width-30, y=cv.height/2-20, h=46;
+  const maxV=mtow*1.18;
+  const px=v=>x0+(v/maxV)*(x1-x0);
+  ctx.font="12px sans-serif";
+  // zones
+  ctx.fillStyle="rgba(55,200,113,.25)"; ctx.fillRect(px(0),y,px(mtow)-px(0),h);
+  ctx.fillStyle="rgba(255,82,82,.25)"; ctx.fillRect(px(mtow),y,px(maxV)-px(mtow),h);
+  ctx.strokeStyle="#2d3f55"; ctx.strokeRect(px(0),y,px(maxV)-px(0),h);
+  // limite MTOW
+  ctx.strokeStyle="#ff5252"; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(px(mtow),y-14); ctx.lineTo(px(mtow),y+h+14); ctx.stroke();
+  ctx.fillStyle="#ff5252"; ctx.fillText("MTOW "+mtow+" kg",px(mtow)-40,y-20);
+  // graduations
+  ctx.fillStyle="#8ba0b8";
+  for(let g=0;g<=maxV;g+=50){ ctx.fillText(g,px(g)-10,y+h+26); }
+  // curseur masse
+  const ok=mass<=mtow;
+  ctx.fillStyle=ok?"#37c871":"#ff5252";
+  ctx.beginPath(); ctx.moveTo(px(mass),y+h+4); ctx.lineTo(px(mass)-8,y+h+16); ctx.lineTo(px(mass)+8,y+h+16); ctx.closePath(); ctx.fill();
+  ctx.font="bold 16px sans-serif";
+  ctx.fillText(mass.toFixed(0)+" kg",px(mass)-25,y+h+34);
+  ctx.font="12px sans-serif"; ctx.fillStyle="#8ba0b8";
+  ctx.fillText("Contrôle de masse (ULM) — pas d'enveloppe de centrage : respectez les limites de chargement du manuel.",x0-30,y+h+56);
 }
 function pointInPoly(x,y,poly){
   let inside=false;
@@ -737,6 +841,7 @@ buildWB();
 // ===================== CARBURANT =====================
 ["fFF","fTaxi","fTrip","fAlt","fRes","fMargin","fCap"].forEach(id=>$(id).addEventListener("input",refreshFuel));
 function refreshFuel(){
+  const dens=(AIRCRAFT[acSel.value]||{fuelDens:0.72}).fuelDens;
   const ff=+$("fFF").value||0;
   const taxi=+$("fTaxi").value||0;
   const trip=(+$("fTrip").value||0)/60*ff;
@@ -756,7 +861,7 @@ function refreshFuel(){
   const tb=$("fuelBody");
   tb.innerHTML=rows.map(r=>"<tr><td style='text-align:left'>"+r[0]+"</td><td style='width:120px'><b>"+r[1].toFixed(1)+" L</b></td></tr>").join("")+
     "<tr style='font-weight:700;font-size:15px'><td style='text-align:left'>EMPORT MINIMAL</td><td style='color:var(--accent)'>"+tot.toFixed(1)+" L</td></tr>"+
-    "<tr><td style='text-align:left;color:var(--muted)'>Soit en masse (AVGAS 0,72 kg/L)</td><td>"+(tot*0.72).toFixed(0)+" kg</td></tr>"+
+    "<tr><td style='text-align:left;color:var(--muted)'>Soit en masse ("+dens.toFixed(2).replace(".",",")+" kg/L)</td><td>"+(tot*dens).toFixed(0)+" kg</td></tr>"+
     "<tr><td style='text-align:left;color:var(--muted)'>Autonomie réservoirs pleins</td><td>"+fmtTime(cap/ff*60)+"</td></tr>";
   const v=$("fuelVerdict");
   if(tot<=cap){ v.className="verdict ok"; v.textContent="✔ Emport possible : "+tot.toFixed(0)+" L pour "+cap+" L de capacité (reste "+(cap-tot).toFixed(0)+" L de latitude)"; }
@@ -803,8 +908,96 @@ async function fetchWx(){
   }
 }
 
-// ===================== CHECKLIST =====================
-const CHECKLIST=[
+// ===================== CHECKLISTS =====================
+// Format item : "texte" ou ["texte","détail"]
+const CK_NYNJA=[
+["🔍 Prévol — Documents & cabine",[
+ ["Brevet ULM + assurance + carte d'identité","Qualification multiaxe valide, RC tiers"],
+ ["Certificat d'identification + carnet de route","À jour, dernière visite technique"],
+ ["Documentation de bord","Manuel de vol, cartes à jour"],
+ ["Ceintures / harnais","État, boucles, enrouleurs"],
+ ["Commandes libres","Manche, palonniers, volets — sans obstruction"],
+ ["Instruments vérifiés","Badin, alti, VSI, compas"],
+ ["Interrupteurs tous OFF avant inspection",""],
+ ["Parachute de secours","Poignée rouge accessible — tirage sur ordre pilote uniquement"]]],
+["🔍 Prévol — Tour extérieur",[
+ ["Haubans + aile gauche + bord d'attaque","Tension, embouts, pas de déformation"],
+ ["Aileron gauche + feu de nav gauche (rouge)","Fixation, débattement libre"],
+ ["Hélice + spinner","Pas d'éclat ni fissure, fixation serrée"],
+ ["Moteur & capotage","Fixation capots, aucune fuite"],
+ ["Admission air + radiateur","Dégagée, filtre propre, pas de fuite liquide"],
+ ["Purge carburant","Pas d'eau ni impureté — purger 500 ml"],
+ ["Niveau carburant + bouchon verrouillé","Jauger visuellement — vol + réserve 30 min"],
+ ["Haubans + aile droite + aileron + feu vert","Comme à gauche"],
+ ["Empennage complet + feu de queue","Stab, profondeur, dérive — fixation, pas de jeu"],
+ ["Train principal + roulette de queue","Pneus gonflés, jantes sans fissure"]]],
+["📝 Briefing",[
+ ["METAR/TAF consultés","Nuages, visibilité, vent, SIGMET"],
+ ["Plafond > 1 500 ft AGL / Visi > 5 km","Minima personnels"],
+ ["Vent traversier < 15 kt","Limite constructeur Nynja"],
+ ["Route, altitude, espaces vérifiés","Zones actives (AZBA)"],
+ ["NOTAM consultés","LFRP + route + dégagement"],
+ ["Terrain de dégagement identifié","Rayon 30 min de vol"],
+ ["Carburant : vol + réserve 30 min + 10 %",""],
+ ["Briefing passager","Ceintures, sorties, parachute, silence radio"],
+ ["Proche prévenu (heure de retour)",""]]],
+["🔑 Démarrage",[
+ ["Zone hélice dégagée","Visuel 360° autour de l'appareil"],
+ ["Frein de parc / roues calées",""],
+ ["Maître ON + carburant ON",""],
+ ["Gaz : plein gaz puis retour 1 cm",""],
+ ["Contact / démarreur — moteur EN MARCHE",""],
+ ["Pression huile","Montée dans les 30 secondes"],
+ ["Ralenti 1 500 tr/min stable — huile 50° min avant pleine puissance",""],
+ ["Alti calé QNH, badin à zéro, voyants OK",""],
+ ["Radio 118.250 (LFRP)","Trafic en écoute"]]],
+["🛞 Roulage & point d'attente",[
+ ["Annonce radio départ","LFRP 118.250 — roulage vers piste active"],
+ ["Vitesse modérée, freinage progressif",""],
+ ["Test magnétos à 3 600 tr/min","Chute max 300 — différence max 120 tr/min"],
+ ["Réchauffage carburateur","Baisse RPM puis remontée"],
+ ["Volets décollage + trim neutre",""],
+ ["Ceintures serrées + verrière verrouillée","Vérification visuelle et tactile"],
+ ["Annonce alignement","LFRP 118.250 — piste XX"]]],
+["🛫 Décollage — ACHEVER",[
+ ["A — Accrochage ceintures","Bouclées et serrées, passager vérifié"],
+ ["C — Commandes libres","Débattement complet"],
+ ["H — Horizon / instruments","Badin, alti calés"],
+ ["E — Essence","Robinet ouvert, quantité suffisante"],
+ ["V — Volets décollage","Position confirmée visuellement"],
+ ["E — Emergencies","Champs en face identifiés si panne moteur"],
+ ["R — Radio 118.250","Décollage annoncé"],
+ ["Vr = 90 km/h — rotation douce",""],
+ ["Vy = 115 km/h (Vx = 95 si obstacle)",""],
+ ["Volets rentrés > 100 m sol","Tour de piste au NORD à LFRP"]]],
+["🛬 Atterrissage — FALEP",[
+ ["Contact radio 3 min avant","LFRP 118.250 — trafic identifié, TDP au NORD"],
+ ["F — Fuel","Robinet ouvert, carburant suffisant"],
+ ["A — Atterrisseur","Train en place, vérifié"],
+ ["L — Largage","Rien de libre à bord"],
+ ["E — Essence / mixture riche",""],
+ ["P — Pompe ON","Si électrique"],
+ ["Vapp = 100 km/h","110 si turbulences — volets atterrissage"],
+ ["Piste dégagée — pas de trafic",""],
+ ["Arrondi : axe tenu, réduction douce, freinage progressif",""],
+ ["Dégager la piste + annonce radio","Piste libre"]]],
+["🏁 Après vol",[
+ ["Ralenti 2 min avant arrêt","Refroidissement culasses"],
+ ["Contact OFF, avionique OFF, maître OFF",""],
+ ["Robinet carburant fermé",""],
+ ["Frein de parc / roues calées",""],
+ ["Tour extérieur rapide","Dommages, fuites huile/carburant"],
+ ["Jauges carburant notées","Pour le prochain vol"],
+ ["Carnet de route + journal à jour","Heures, route, observations"]]]
+];
+const NYNJA_EMERG=[
+["Panne moteur",["Vitesse finesse max 90-100 km/h","Viser le 1er quart d'un champ","Essais redémarrage si altitude (robinet, contact, démarreur)","Mayday ×3 sur 121.500 + transpondeur 7700","Ceintures serrées — avant impact : contact et carburant coupés"]],
+["Feu en vol",["Contact + carburant coupés immédiatement","Atterrissage immédiat champ le plus proche","Mayday 121.500 — position, feu à bord","Évacuer immédiatement après pose"]],
+["Hélice / vibrations",["Vibrations anormales : gaz au minimum, atterrissage immédiat","Perte de pale suspectée : contact coupé, descente finesse max","Survitesse : couper gaz, terrain le plus proche, Mayday"]],
+["Panne de commandes",["Profondeur : piloter au TRIM + GAZ + VOLETS","Ailerons : piloter aux PALONNIERS, limiter l'inclinaison","Dans tous les cas : Mayday 121.500, terrain le plus proche"]],
+["Crevaison",["Au roulage : freinage doux, tenir l'axe, s'arrêter","À l'atterrissage : tenir l'axe, freiner côté intact","Au décollage : réduire, freiner, rester sur la piste — ne pas décoller"]]
+];
+const CK_GENERIC=[
 ["Documentation & réglementaire",[
  "Licence, certificat médical et emport à jour",
  "Carnet de route et documents avion à bord (CDN, CEN, assurance, LSA)",
@@ -831,30 +1024,48 @@ const CHECKLIST=[
  "Plan de vol déposé si nécessaire (survol maritime, étranger…)",
  "Téléphone chargé, heure limite de retour transmise à un proche"]]
 ];
-let ckState=store.get("ck",{});
+const CK_SETS={ nynja:CK_NYNJA, generic:CK_GENERIC };
+function ckKey(){ return "ck_"+((AIRCRAFT[acSel.value]||{}).ck||"generic"); }
 function buildCk(){
+  const ac=AIRCRAFT[acSel.value]||{ck:"generic"};
+  const LIST=CK_SETS[ac.ck]||CK_GENERIC;
+  const ckState=store.get(ckKey(),{});
   const out=$("ckOut"); out.innerHTML="";
   let total=0, done=0;
-  CHECKLIST.forEach((sec,si)=>{
+  LIST.forEach((sec,si)=>{
     const div=document.createElement("div"); div.className="ck-section";
     div.innerHTML="<h3>"+sec[0]+"</h3>";
     sec[1].forEach((item,ii)=>{
+      const txt=Array.isArray(item)?item[0]:item;
+      const det=Array.isArray(item)?item[1]:"";
       const key=si+"_"+ii, checked=!!ckState[key];
       total++; if(checked) done++;
       const lab=document.createElement("label");
       lab.className="ck-item"+(checked?" done":"");
-      lab.innerHTML='<input type="checkbox" '+(checked?"checked":"")+'><span>'+item+'</span>';
+      lab.innerHTML='<input type="checkbox" '+(checked?"checked":"")+'><span>'+txt+(det?'<small class="det">'+det+'</small>':"")+'</span>';
       lab.querySelector("input").addEventListener("change",e=>{
-        ckState[key]=e.target.checked; store.set("ck",ckState); buildCk();
+        const st=store.get(ckKey(),{});
+        st[key]=e.target.checked; store.set(ckKey(),st); buildCk();
       });
       div.appendChild(lab);
     });
     out.appendChild(div);
   });
   $("ckFill").style.width=(total?done/total*100:0)+"%";
+  // Urgences (profil Nynja)
+  const em=$("ckEmerg"); em.innerHTML="";
+  if(ac.ck==="nynja"){
+    const h=document.createElement("div");
+    h.innerHTML='<div class="section-title" style="margin-top:22px;color:var(--bad)">🚨 Urgences Nynja (mémo)</div><div class="section-sub">À connaître par cœur — ne se coche pas.</div>';
+    em.appendChild(h);
+    NYNJA_EMERG.forEach(e=>{
+      const d=document.createElement("div"); d.className="emerg-card";
+      d.innerHTML="<h3>"+e[0]+"</h3><ol>"+e[1].map(x=>"<li>"+x+"</li>").join("")+"</ol>";
+      em.appendChild(d);
+    });
+  }
 }
-$("ckReset").addEventListener("click",()=>{ if(confirm("Décocher toute la checklist ?")){ ckState={}; store.set("ck",ckState); buildCk(); } });
-buildCk();
+$("ckReset").addEventListener("click",()=>{ if(confirm("Décocher toute la checklist ?")){ store.set(ckKey(),{}); buildCk(); } });
 
 // ===================== NAVIGATION EN VOL (GPS) =====================
 let navOn=false, navWatch=null, navTarget=0, lastFix=null, smGS=null;
@@ -944,7 +1155,14 @@ function onFix(pos){
   }
 }
 
-// init
+// ===================== MOBILE : panneau route =====================
+$("sbToggle").addEventListener("click",()=>{ document.body.classList.add("sb-open"); });
+$("sbClose").addEventListener("click",()=>{ document.body.classList.remove("sb-open"); setTimeout(()=>map.invalidateSize(),60); });
+
+// ===================== INIT =====================
+const savedAc=store.get("ac",null);
+if(savedAc && AIRCRAFT[savedAc]) acSel.value=savedAc;
+applyProfile();
 redraw();
 </script>
 </body>
